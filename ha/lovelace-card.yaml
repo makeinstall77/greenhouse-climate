@@ -1,0 +1,13 @@
+# Lovelace card snippet — paste into a dashboard view.
+type: entities
+title: Greenhouse balcony heat
+show_header_toggle: false
+entities:
+  - entity: input_boolean.greenhouse_climate_enabled
+    name: Control enabled
+  - entity: input_number.greenhouse_climate_target
+    name: Air target
+  - entity: sensor.esp32home_temperature
+    name: Greenhouse air
+  - entity: climate.smart_thermostat_local_teplyi_pol_local
+    name: Floor thermostat

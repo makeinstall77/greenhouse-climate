@@ -1,0 +1,17 @@
+# Copy to HAOS /config/packages/greenhouse_climate.yaml (or merge into configuration.yaml)
+# then restart / reload helpers.
+
+input_boolean:
+  greenhouse_climate_enabled:
+    name: Greenhouse climate control
+    icon: mdi:radiator
+
+input_number:
+  greenhouse_climate_target:
+    name: Greenhouse air target
+    min: 15
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    mode: slider

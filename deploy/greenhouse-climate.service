@@ -1,0 +1,15 @@
+[Unit]
+Description=Greenhouse balcony floor climate controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/greenhouse-climate.env
+Environment=PYTHONPATH=/usr/local/lib/greenhouse-climate
+ExecStart=/usr/bin/python3 -m greenhouse_climate
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
