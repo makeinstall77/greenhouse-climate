@@ -9,18 +9,20 @@
 
 ## Behaviour
 
-1. Читает воздух (`AIR_ENTITY`), пол (`FLOOR_CLIMATE_ENTITY`), день/ночь (`SUN_ENTITY`).
+1. Читает воздух (`AIR_ENTITY`), пол (`FLOOR_CLIMATE_ENTITY`), день/ночь (`SUN_ENTITY`), опционально погоду (`WEATHER_ENTITY`, Met.no).
 2. Учит Δ = floor − air из HA history (ночь + установившийся режим), EMA в `state.json`.
 3. Если control enabled — пишет setpoint пола к `air_target + Δ` (± margin), с rate-limit.
-4. Днём при признаках солнечного нагрева снижает setpoint на `SOLAR_OFFSET_C`.
-5. UI: HA helpers + Lovelace card. HTTP `/v1/control` — для будущего TG-бота.
+4. **Тренд воздуха приоритетен**: при падении к цели не снижает уставку пола (`falling_guess`); при росте без нагрева пола снижает на `SOLAR_OFFSET_C` (`solar_guess`).
+5. Sun + weather — вторичный early hint (`likely_sun`); при конфликте с трендом побеждает тренд (открытое окно / ошибка прогноза).
+6. Недоступность air/floor/sun/weather/записи → `degraded` / warning, tick не падает.
+7. UI: HA helpers + Lovelace card. HTTP `/v1/control` — для будущего TG-бота.
 
 ## API
 
 | Method | Path | Role |
 |---|---|---|
 | `GET` | `/health` | liveness |
-| `GET` | `/v1/status` | state snapshot |
+| `GET` | `/v1/status` | state snapshot (`falling_guess`, `likely_sun`, `degraded`, …) |
 | `GET`/`PATCH`/`POST` | `/v1/control` | `{enabled, target_c}` |
 
 Optional header: `X-Api-Key: $API_KEY`.
@@ -41,13 +43,14 @@ Governor depends only on ports in `ports.py`:
 | `AirTemperatureSource` | `adapters/ha_air.py` |
 | `FloorThermostat` | `adapters/ha_floor.py` |
 | `DayNightSource` | `adapters/ha_sun.py` |
+| `SolarHintSource` | `adapters/ha_weather.py` (sun + `weather.forecast_home_assistant`) |
 | `TemperatureHistorySource` | `adapters/ha_history.py` |
 
-Смена термостата/датчика = новый adapter + entity IDs в env.
+Смена термостата/датчика = новый adapter + entity IDs в env. Пустой `WEATHER_ENTITY=` отключает weather hint.
 
 ## HA one-time setup
 
-1. Long-lived access token (права на climate, sensor, sun, input_*, history).
+1. Long-lived access token (права на climate, sensor, sun, weather, input_*, history).
 2. Helpers: [`ha/helpers.yaml`](ha/helpers.yaml) → package / configuration.
 3. Card: [`ha/lovelace-card.yaml`](ha/lovelace-card.yaml).
 
@@ -83,5 +86,6 @@ HA_TOKEN=… DRY_RUN=1 STATE_PATH=./state.json python -m greenhouse_climate
 ## Out of scope (for now)
 
 - Telegram bot (API ready)
-- Humidity / illuminance adapters (ports reserved)
+- Local illuminance sensor (port reserved; weather is interim proxy)
+- Humidity adapters (ports reserved)
 - Direct LocalTuya / ESPHome (possible as new adapters)

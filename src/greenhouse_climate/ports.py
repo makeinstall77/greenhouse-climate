@@ -37,6 +37,14 @@ class DayNightSource(Protocol):
 
 
 @runtime_checkable
+class SolarHintSource(Protocol):
+    """Optional sun/weather proxy until a local illuminance sensor exists."""
+
+    def likely_sun(self) -> Optional[bool]:
+        """True/False when known; None when weather/sun unavailable."""
+
+
+@runtime_checkable
 class HumiditySource(Protocol):
     """Optional future feedforward (air thermal inertia proxy)."""
 

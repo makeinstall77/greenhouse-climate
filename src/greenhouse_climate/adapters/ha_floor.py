@@ -14,11 +14,19 @@ class HaFloorThermostat:
         self.dry_run = dry_run
 
     def _attrs(self) -> dict:
-        return self.ha.get_state(self.entity_id).get("attributes") or {}
+        state = self.ha.get_state(self.entity_id)
+        raw = state.get("state")
+        # LocalTuya sometimes reports state=unknown while temps are still valid.
+        if raw == "unavailable":
+            raise RuntimeError(f"{self.entity_id} state={raw!r}")
+        return state.get("attributes") or {}
 
     def read_current_c(self) -> float:
         attrs = self._attrs()
-        return float(attrs["current_temperature"])
+        temp = attrs.get("current_temperature")
+        if temp is None:
+            raise RuntimeError(f"{self.entity_id} missing current_temperature")
+        return float(temp)
 
     def read_setpoint_c(self) -> Optional[float]:
         attrs = self._attrs()

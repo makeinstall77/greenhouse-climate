@@ -56,6 +56,7 @@ class Settings:
     air_entity: str
     floor_climate_entity: str
     sun_entity: str
+    weather_entity: str
     helper_enabled: str
     helper_target: str
 
@@ -68,6 +69,8 @@ class Settings:
     boost_night_c: float
     margin_c: float
     solar_offset_c: float
+    trend_fall_c: float
+    trend_rise_c: float
     default_delta_c: float
     delta_hours: float
     delta_refresh_s: float
@@ -92,13 +95,16 @@ class Settings:
             ),
             loop_seconds=_f("LOOP_SECONDS", 90.0),
             air_entity=os.environ.get(
-                "AIR_ENTITY", "sensor.esp32home_temperature"
+                "AIR_ENTITY", "sensor.greenhouse_bmp280_temperature"
             ),
             floor_climate_entity=os.environ.get(
                 "FLOOR_CLIMATE_ENTITY",
                 "climate.smart_thermostat_local_teplyi_pol_local",
             ),
             sun_entity=os.environ.get("SUN_ENTITY", "sun.sun"),
+            weather_entity=os.environ.get(
+                "WEATHER_ENTITY", "weather.forecast_home_assistant"
+            ),
             helper_enabled=os.environ.get(
                 "HELPER_ENABLED", "input_boolean.greenhouse_climate_enabled"
             ),
@@ -114,6 +120,8 @@ class Settings:
             boost_night_c=_f("BOOST_NIGHT_C", 3.0),
             margin_c=_f("MARGIN_C", 1.0),
             solar_offset_c=_f("SOLAR_OFFSET_C", 1.5),
+            trend_fall_c=_f("TREND_FALL_C", 0.2),
+            trend_rise_c=_f("TREND_RISE_C", 0.3),
             default_delta_c=_f("DEFAULT_DELTA_C", 4.0),
             delta_hours=_f("DELTA_HOURS", 48.0),
             delta_refresh_s=_f("DELTA_REFRESH_S", 1800.0),

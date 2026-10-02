@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from greenhouse_climate.ha_rest import HaRest
+
+log = logging.getLogger("greenhouse_climate.sun")
 
 
 class HaDayNight:
@@ -12,4 +16,7 @@ class HaDayNight:
 
     def is_day(self) -> bool:
         state = self.ha.get_state(self.entity_id)
-        return state.get("state") == "above_horizon"
+        value = state.get("state")
+        if value in {"unknown", "unavailable", None}:
+            raise RuntimeError(f"{self.entity_id} state={value!r}")
+        return value == "above_horizon"

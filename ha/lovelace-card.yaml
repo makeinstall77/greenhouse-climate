@@ -7,7 +7,7 @@ entities:
     name: Control enabled
   - entity: input_number.greenhouse_climate_target
     name: Air target
-  - entity: sensor.esp32home_temperature
+  - entity: sensor.greenhouse_bmp280_temperature
     name: Greenhouse air
   - entity: climate.smart_thermostat_local_teplyi_pol_local
     name: Floor thermostat

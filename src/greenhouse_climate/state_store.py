@@ -24,6 +24,9 @@ class ControlState:
     last_air_c: Optional[float] = None
     last_air_at: float = 0.0
     solar_guess: bool = False
+    falling_guess: bool = False
+    likely_sun: Optional[bool] = None
+    degraded: list[str] = field(default_factory=list)
     mode: str = "idle"
     helper_enabled_seen: Optional[str] = None
     helper_target_seen: Optional[float] = None

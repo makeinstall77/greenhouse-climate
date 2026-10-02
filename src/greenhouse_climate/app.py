@@ -15,6 +15,7 @@ from greenhouse_climate.adapters import (
     HaAirTemperature,
     HaDayNight,
     HaFloorThermostat,
+    HaSunWeatherHint,
     HaTemperatureHistory,
 )
 from greenhouse_climate.config import Settings, load_env_file
@@ -37,6 +38,9 @@ class Controller:
             self.ha, settings.floor_climate_entity, dry_run=settings.dry_run
         )
         self.day_night = HaDayNight(self.ha, settings.sun_entity)
+        self.solar_hint = HaSunWeatherHint(
+            self.ha, self.day_night, settings.weather_entity
+        )
         history = HaTemperatureHistory(
             self.ha,
             air_entity=settings.air_entity,
@@ -66,7 +70,10 @@ class Controller:
                 boost_night_c=settings.boost_night_c,
                 margin_c=settings.margin_c,
                 solar_offset_c=settings.solar_offset_c,
+                trend_fall_c=settings.trend_fall_c,
+                trend_rise_c=settings.trend_rise_c,
             ),
+            solar_hint=self.solar_hint,
         )
         self._lock = threading.RLock()
         self._last_tick: Optional[dict[str, Any]] = None
@@ -84,6 +91,9 @@ class Controller:
                 "delta_samples": st.delta_samples,
                 "delta_updated_at": st.delta_updated_at,
                 "solar_guess": st.solar_guess,
+                "falling_guess": st.falling_guess,
+                "likely_sun": st.likely_sun,
+                "degraded": list(st.degraded),
                 "last_setpoint_c": st.last_setpoint_c,
                 "dry_run": self.settings.dry_run,
                 "last_tick": self._last_tick,
@@ -109,14 +119,12 @@ class Controller:
                 en = self.ha.get_state(self.settings.helper_enabled)
                 en_state = en.get("state")
                 if en_state in {"on", "off"}:
-                    if st.helper_enabled_seen is None or en_state != st.helper_enabled_seen:
-                        st.enabled = en_state == "on"
-                        st.helper_enabled_seen = en_state
+                    st.enabled = en_state == "on"
+                    st.helper_enabled_seen = en_state
                 tgt = self.ha.get_state(self.settings.helper_target)
                 tgt_val = float(tgt.get("state"))
-                if st.helper_target_seen is None or abs(tgt_val - st.helper_target_seen) > 1e-6:
-                    st.target_c = tgt_val
-                    st.helper_target_seen = tgt_val
+                st.target_c = tgt_val
+                st.helper_target_seen = tgt_val
             except Exception as exc:
                 log.warning("helper sync failed: %s", exc)
 
@@ -151,6 +159,9 @@ class Controller:
                 "desired_c": result.desired_c,
                 "written": result.written,
                 "solar_guess": result.solar_guess,
+                "falling_guess": result.falling_guess,
+                "likely_sun": result.likely_sun,
+                "degraded": list(result.degraded),
                 "is_day": result.is_day,
                 "delta_c": result.delta_c,
                 "ts": time.time(),

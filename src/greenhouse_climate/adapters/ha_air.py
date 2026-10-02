@@ -12,4 +12,7 @@ class HaAirTemperature:
 
     def read_c(self) -> float:
         state = self.ha.get_state(self.entity_id)
-        return float(state["state"])
+        raw = state.get("state")
+        if raw in {None, "unknown", "unavailable"}:
+            raise RuntimeError(f"{self.entity_id} state={raw!r}")
+        return float(raw)
