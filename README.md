@@ -3,7 +3,7 @@
 Лёгкий контроллер тёплого пола балкона по температуре воздуха greenhouse.
 Работает **вне** HAOS и ESPHome: HA только как шина датчиков/актуатора и UI.
 
-- Host: `greenhouse-climate.sweethome.local` / **`172.16.10.240`** (mgmt, LXC)
+- Host: `greenhouse-climate.sweethome.local` / **`172.16.10.170`** (mgmt, LXC)
 - Port: `8080`
 - Code: this repo (GitHub `makeinstall77/greenhouse-climate`)
 
@@ -26,8 +26,8 @@
 Optional header: `X-Api-Key: $API_KEY`.
 
 ```bash
-curl -sS http://172.16.10.240:8080/v1/status
-curl -sS -X PATCH http://172.16.10.240:8080/v1/control \
+curl -sS http://172.16.10.170:8080/v1/status
+curl -sS -X PATCH http://172.16.10.170:8080/v1/control \
   -H 'Content-Type: application/json' \
   -d '{"enabled":true,"target_c":22}'
 ```
@@ -51,7 +51,7 @@ Governor depends only on ports in `ports.py`:
 2. Helpers: [`ha/helpers.yaml`](ha/helpers.yaml) → package / configuration.
 3. Card: [`ha/lovelace-card.yaml`](ha/lovelace-card.yaml).
 
-## Install on LXC (`172.16.10.240`)
+## Install on LXC (`172.16.10.170`)
 
 ```bash
 sudo apt-get install -y python3
@@ -67,7 +67,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now greenhouse-climate.service
 ```
 
-Suggested CT: **1 vCPU / 128 MiB**, no Docker. DNS/DHCP: `greenhouse-climate` → `172.16.10.240`.
+Suggested CT: **1 vCPU / 128 MiB**, no Docker. DNS/DHCP: `greenhouse-climate` → `172.16.10.170`.
 
 Start with `DRY_RUN=1` until status looks sane.
 
