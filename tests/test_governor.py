@@ -101,7 +101,14 @@ def _gov(
         floor_dev,
         day_src or FakeDay(day),
         delta_model,
-        GovernorParams(min_write_interval_s=0.0, setpoint_step_c=0.5),
+        GovernorParams(
+            min_write_interval_s=0.0,
+            setpoint_step_c=0.5,
+            trend_min_s=120.0,
+            trend_window_s=1200.0,
+            trend_fall_c=0.1,
+            trend_rise_c=0.8,
+        ),
         solar_hint=solar_hint,
     )
     state = ControlState(enabled=True, target_c=target, delta_c=delta)
@@ -153,6 +160,65 @@ def test_falling_blocks_cool_and_keeps_setpoint():
     assert result.desired_c == 33.0
 
 
+def test_slow_overnight_fall_does_not_lower_setpoint():
+    """~1 °C/h overnight fall must keep floor SP (old per-tick Δ=0.2 missed this)."""
+    floor = FakeFloor(current=30.0, setpoint=33.0)
+    air = FakeAir(26.5)
+    history = FakeHistory()
+    delta_model = DeltaModel(history, refresh_s=1e9, default_delta_c=5.0)
+    gov = SetpointGovernor(
+        air,
+        floor,
+        FakeDay(False),
+        delta_model,
+        GovernorParams(
+            min_write_interval_s=180.0,
+            setpoint_step_c=0.5,
+            trend_min_s=600.0,
+            trend_window_s=1200.0,
+            trend_fall_c=0.1,
+        ),
+    )
+    state = ControlState(enabled=True, target_c=25.0, delta_c=5.0)
+    # Warm start: 20 min of prior slow fall already in history.
+    t0 = 1_000_000.0
+    state.air_history = [
+        [t0 - 1200.0, 26.5 + 1200.0 * (0.025 / 90.0)],
+        [t0 - 600.0, 26.5 + 600.0 * (0.025 / 90.0)],
+    ]
+    state.last_air_c = state.air_history[-1][1]
+    state.last_air_at = state.air_history[-1][0]
+    now = t0
+    falling_hits = 0
+    for _ in range(160):  # 4 h @ 90 s
+        result = gov.tick(state, now=now)
+        assert result.falling_guess is True
+        falling_hits += 1
+        assert floor.setpoint == 33.0
+        assert result.desired_c == 33.0
+        assert floor.writes == []
+        air.value -= 0.025  # 1 °C/h
+        now += 90
+    assert falling_hits == 160
+
+
+def test_daytime_solar_cool_after_rise_still_works():
+    """After air stops falling and sun is likely, cool+solar may lower SP."""
+    hint = FakeSolarHint(value=True)
+    gov, state, floor = _gov(
+        air=26.0, floor=29.0, sp=30.0, day=True, delta=5.0, target=25.0, solar_hint=hint
+    )
+    # Rising ~2 °C/h over 20 min — not falling.
+    state.air_history = [[1_000.0, 25.3], [1_600.0, 25.6]]
+    state.last_air_c = 25.6
+    state.last_air_at = 1_600.0
+    result = gov.tick(state, now=2_200.0)
+    assert result.falling_guess is False
+    assert result.mode == "cool"
+    assert floor.writes
+    assert floor.writes[-1] < 30.0
+
+
 def test_cool_without_falling_still_lowers():
     gov, state, floor = _gov(
         air=25.6, floor=30.0, sp=33.0, day=False, delta=4.0, target=25.0
@@ -184,9 +250,9 @@ def test_trend_solar_beats_cloudy_weather():
     gov, state, floor = _gov(
         air=23.0, floor=26.0, sp=26.0, day=True, delta=4.0, target=22.0, solar_hint=hint
     )
+    # +0.5 °C / 200 s ≈ 9 °C/h → solar_guess; above deadband → cool + offset.
     state.last_air_c = 22.5
     state.last_air_at = 1_000.0
-    # Rising without floor drive → solar_guess; above deadband → cool + offset.
     result = gov.tick(state, now=1_200.0)
     assert result.solar_guess is True
     assert result.likely_sun is False
@@ -208,6 +274,7 @@ def test_falling_beats_sunny_weather():
     assert result.likely_sun is True
     assert result.mode == "hold"
     assert floor.writes == []
+    assert result.desired_c == 33.0
 
 
 def test_weather_early_hint_without_trend():

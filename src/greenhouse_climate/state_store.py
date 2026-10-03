@@ -23,6 +23,8 @@ class ControlState:
     last_write_at: float = 0.0
     last_air_c: Optional[float] = None
     last_air_at: float = 0.0
+    # Recent air samples [[unix_ts, temp_c], ...] for rate-based trend.
+    air_history: list[list[float]] = field(default_factory=list)
     solar_guess: bool = False
     falling_guess: bool = False
     likely_sun: Optional[bool] = None
@@ -38,6 +40,16 @@ class ControlState:
     def from_dict(cls, data: dict[str, Any]) -> "ControlState":
         known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
         kwargs = {k: v for k, v in data.items() if k in known}
+        hist = kwargs.get("air_history")
+        if hist is not None:
+            cleaned: list[list[float]] = []
+            for item in hist:
+                try:
+                    if isinstance(item, (list, tuple)) and len(item) >= 2:
+                        cleaned.append([float(item[0]), float(item[1])])
+                except (TypeError, ValueError):
+                    continue
+            kwargs["air_history"] = cleaned
         return cls(**kwargs)
 
 

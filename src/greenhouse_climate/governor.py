@@ -31,10 +31,12 @@ class GovernorParams:
     boost_night_c: float = 3.0
     margin_c: float = 1.0
     solar_offset_c: float = 1.5
-    trend_rise_c: float = 0.3
-    trend_fall_c: float = 0.2
-    trend_min_s: float = 60.0
-    trend_max_s: float = 3600.0
+    # Air trend thresholds in °C/hour over [trend_min_s, trend_window_s].
+    trend_rise_c: float = 0.8
+    trend_fall_c: float = 0.1
+    trend_window_s: float = 1200.0
+    trend_min_s: float = 600.0
+    trend_max_s: float = 7200.0
 
 
 @dataclass
@@ -101,8 +103,11 @@ class SetpointGovernor:
         solar_guess = False
         falling_guess = False
         if air_c is not None:
-            solar_guess = self._solar_guess(state, air_c, floor_c, setpoint_c, is_day, now)
-            falling_guess = self._falling_guess(state, air_c, now)
+            air_rate = self._air_rate_c_per_h(state, air_c, now)
+            solar_guess = self._solar_guess(
+                air_rate, floor_c, setpoint_c, is_day
+            )
+            falling_guess = self._falling_guess(air_rate)
             state.last_air_c = air_c
             state.last_air_at = now
 
@@ -179,14 +184,23 @@ class SetpointGovernor:
             elif abs(floor_c - desired) <= self.params.deadband_c + 0.5:
                 desired = floor_c
 
-        # While air is falling toward/above target, never lower the floor setpoint.
-        if falling_guess and air_c >= target - db and setpoint_c is not None:
+        # While air is falling, never lower the floor setpoint (hold/cool/solar).
+        # Heat may still raise it. Daytime cool resumes once the fall stops.
+        if falling_guess and setpoint_c is not None:
             desired = max(desired, setpoint_c)
 
         desired = self._quantize(self._clamp(desired))
         state.mode = mode
 
         write_value = self._rate_limited(setpoint_c, desired)
+        # Extra guard: never commit a lower setpoint while falling.
+        if (
+            falling_guess
+            and write_value is not None
+            and setpoint_c is not None
+            and write_value < setpoint_c - 1e-6
+        ):
+            write_value = None
         written = False
         if write_value is not None and self._may_write(state, setpoint_c, write_value, now):
             try:
@@ -248,40 +262,61 @@ class SetpointGovernor:
             return True
         return False
 
-    def _air_delta(self, state: ControlState, air_c: float, now: float) -> Optional[float]:
-        if state.last_air_c is None or state.last_air_at <= 0:
+    def _update_air_history(
+        self, state: ControlState, air_c: float, now: float
+    ) -> list[list[float]]:
+        hist = list(state.air_history or [])
+        if (
+            not hist
+            and state.last_air_c is not None
+            and state.last_air_at > 0
+            and state.last_air_at < now
+        ):
+            hist.append([float(state.last_air_at), float(state.last_air_c)])
+        hist.append([float(now), float(air_c)])
+        window = max(self.params.trend_window_s, self.params.trend_min_s)
+        cutoff = now - window
+        hist = [pair for pair in hist if pair[0] >= cutoff]
+        # Cap length so state.json stays small (≈ loop 90s → ~14 pts / 20 min).
+        max_points = max(8, int(window / 60.0) + 4)
+        if len(hist) > max_points:
+            hist = hist[-max_points:]
+        state.air_history = hist
+        return hist
+
+    def _air_rate_c_per_h(
+        self, state: ControlState, air_c: float, now: float
+    ) -> Optional[float]:
+        """Mean air change rate (°C/h) from oldest sample in the trend window."""
+        hist = self._update_air_history(state, air_c, now)
+        if len(hist) < 2:
             return None
-        dt = now - state.last_air_at
+        t0, c0 = hist[0]
+        dt = now - t0
         if dt < self.params.trend_min_s or dt > self.params.trend_max_s:
             return None
-        return air_c - state.last_air_c
+        return (air_c - c0) / (dt / 3600.0)
 
     def _solar_guess(
         self,
-        state: ControlState,
-        air_c: float,
+        air_rate: Optional[float],
         floor_c: Optional[float],
         setpoint_c: Optional[float],
         is_day: bool,
-        now: float,
     ) -> bool:
-        if not is_day:
-            return False
-        d_air = self._air_delta(state, air_c, now)
-        if d_air is None:
+        if not is_day or air_rate is None:
             return False
         floor_driving = (
             floor_c is not None
             and setpoint_c is not None
             and setpoint_c > floor_c + 0.5
         )
-        return d_air > self.params.trend_rise_c and not floor_driving
+        return air_rate > self.params.trend_rise_c and not floor_driving
 
-    def _falling_guess(self, state: ControlState, air_c: float, now: float) -> bool:
-        d_air = self._air_delta(state, air_c, now)
-        if d_air is None:
+    def _falling_guess(self, air_rate: Optional[float]) -> bool:
+        if air_rate is None:
             return False
-        return d_air < -self.params.trend_fall_c
+        return air_rate < -self.params.trend_fall_c
 
     def _safe_air(self) -> Optional[float]:
         try:

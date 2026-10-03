@@ -71,6 +71,9 @@ class Settings:
     solar_offset_c: float
     trend_fall_c: float
     trend_rise_c: float
+    trend_window_s: float
+    trend_min_s: float
+    trend_max_s: float
     default_delta_c: float
     delta_hours: float
     delta_refresh_s: float
@@ -120,8 +123,12 @@ class Settings:
             boost_night_c=_f("BOOST_NIGHT_C", 3.0),
             margin_c=_f("MARGIN_C", 1.0),
             solar_offset_c=_f("SOLAR_OFFSET_C", 1.5),
-            trend_fall_c=_f("TREND_FALL_C", 0.2),
-            trend_rise_c=_f("TREND_RISE_C", 0.3),
+            # Trend thresholds are °C/hour over TREND_WINDOW_S (not per-tick Δ).
+            trend_fall_c=_f("TREND_FALL_C", 0.1),
+            trend_rise_c=_f("TREND_RISE_C", 0.8),
+            trend_window_s=_f("TREND_WINDOW_S", 1200.0),
+            trend_min_s=_f("TREND_MIN_S", 600.0),
+            trend_max_s=_f("TREND_MAX_S", 7200.0),
             default_delta_c=_f("DEFAULT_DELTA_C", 4.0),
             delta_hours=_f("DELTA_HOURS", 48.0),
             delta_refresh_s=_f("DELTA_REFRESH_S", 1800.0),

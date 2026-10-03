@@ -72,6 +72,9 @@ class Controller:
                 solar_offset_c=settings.solar_offset_c,
                 trend_fall_c=settings.trend_fall_c,
                 trend_rise_c=settings.trend_rise_c,
+                trend_window_s=settings.trend_window_s,
+                trend_min_s=settings.trend_min_s,
+                trend_max_s=settings.trend_max_s,
             ),
             solar_hint=self.solar_hint,
         )
