@@ -133,9 +133,23 @@ def test_hold_near_target_uses_delta():
 def test_disabled_does_not_write():
     gov, state, floor = _gov(air=10.0, floor=20.0, sp=20.0)
     state.enabled = False
+    floor.mode = "off"
     result = gov.tick(state, now=1_000.0)
     assert result.mode == "disabled"
     assert floor.writes == []
+    assert floor.mode == "off"
+
+
+def test_turns_thermostat_on_when_off_even_without_setpoint_write():
+    # Hold near target: desired SP matches current → no write, but heat must enable.
+    floor = FakeFloor(current=26.0, setpoint=26.0, mode="off")
+    gov, state, _ = _gov(
+        air=22.0, floor=26.0, sp=26.0, day=False, delta=4.0, floor_dev=floor
+    )
+    result = gov.tick(state, now=1_000.0)
+    assert result.mode == "hold"
+    assert floor.writes == []
+    assert floor.mode == "heat"
 
 
 def test_cool_lowers_setpoint():

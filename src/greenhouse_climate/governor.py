@@ -192,6 +192,10 @@ class SetpointGovernor:
         desired = self._quantize(self._clamp(desired))
         state.mode = mode
 
+        # Keep thermostat on even when setpoint does not need a write
+        # (e.g. someone turned climate off in HA).
+        self._ensure_heat_mode()
+
         write_value = self._rate_limited(setpoint_c, desired)
         # Extra guard: never commit a lower setpoint while falling.
         if (
@@ -204,7 +208,6 @@ class SetpointGovernor:
         written = False
         if write_value is not None and self._may_write(state, setpoint_c, write_value, now):
             try:
-                self._ensure_heat_mode()
                 self.floor.write_setpoint_c(write_value)
                 state.last_setpoint_c = write_value
                 state.last_write_at = now
@@ -392,5 +395,12 @@ class SetpointGovernor:
         except Exception as exc:
             log.warning("hvac mode read failed: %s", exc)
             return
-        if mode in {None, "off"}:
+        # Floor thermostat should stay in heat while the governor is active.
+        # LocalTuya may briefly report unknown; treat anything but heat as off.
+        if mode == "heat":
+            return
+        try:
             self.floor.set_hvac_mode("heat")
+            log.info("hvac mode %s -> heat", mode)
+        except Exception as exc:
+            log.warning("hvac mode set failed: %s", exc)
