@@ -24,10 +24,14 @@ class FloorThermostat(Protocol):
         """Apply a new floor setpoint °C."""
 
     def read_hvac_mode(self) -> Optional[str]:
-        """e.g. heat / off / auto."""
+        """e.g. heat / off / auto (program/schedule)."""
 
     def set_hvac_mode(self, mode: str) -> None:
-        """Set HVAC mode when the controller needs heat enabled."""
+        """Set HVAC mode when the controller needs heat enabled.
+
+        For the LocalTuya floor thermostat, ``heat`` also means manual
+        (not program/schedule), so setpoints can be applied.
+        """
 
 
 @runtime_checkable

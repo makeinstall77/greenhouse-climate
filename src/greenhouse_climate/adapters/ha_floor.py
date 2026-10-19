@@ -2,16 +2,31 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from greenhouse_climate.ha_rest import HaRest
 
+log = logging.getLogger("greenhouse_climate.floor")
+
 
 class HaFloorThermostat:
-    def __init__(self, ha: HaRest, entity_id: str, *, dry_run: bool = False) -> None:
+    def __init__(
+        self,
+        ha: HaRest,
+        entity_id: str,
+        *,
+        dry_run: bool = False,
+        tuya_device_id: str = "",
+        mode_dp: int = 4,
+        manual_dp_value: str = "1",
+    ) -> None:
         self.ha = ha
         self.entity_id = entity_id
         self.dry_run = dry_run
+        self.tuya_device_id = tuya_device_id
+        self.mode_dp = mode_dp
+        self.manual_dp_value = manual_dp_value
 
     def _attrs(self) -> dict:
         state = self.ha.get_state(self.entity_id)
@@ -51,8 +66,28 @@ class HaFloorThermostat:
     def set_hvac_mode(self, mode: str) -> None:
         if self.dry_run:
             return
+        # LocalTuya floor thermostat: DP4 "1"=manual, "0"=program/schedule.
+        # Schedule ignores set_temperature — force manual even if climate call fails.
+        if mode == "heat":
+            self._force_manual_dp()
         self.ha.call_service(
             "climate",
             "set_hvac_mode",
             {"entity_id": self.entity_id, "hvac_mode": mode},
         )
+
+    def _force_manual_dp(self) -> None:
+        if not self.tuya_device_id:
+            return
+        try:
+            self.ha.call_service(
+                "localtuya",
+                "set_dp",
+                {
+                    "device_id": self.tuya_device_id,
+                    "dp": self.mode_dp,
+                    "value": self.manual_dp_value,
+                },
+            )
+        except Exception as exc:
+            log.warning("localtuya set_dp manual failed: %s", exc)

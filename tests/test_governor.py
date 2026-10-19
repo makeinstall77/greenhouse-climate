@@ -152,6 +152,18 @@ def test_turns_thermostat_on_when_off_even_without_setpoint_write():
     assert floor.mode == "heat"
 
 
+def test_leaves_schedule_auto_for_heat_manual_even_without_setpoint_write():
+    # Program/schedule (HA auto) ignores set_temperature until manual/heat.
+    floor = FakeFloor(current=26.0, setpoint=26.0, mode="auto")
+    gov, state, _ = _gov(
+        air=22.0, floor=26.0, sp=26.0, day=False, delta=4.0, floor_dev=floor
+    )
+    result = gov.tick(state, now=1_000.0)
+    assert result.mode == "hold"
+    assert floor.writes == []
+    assert floor.mode == "heat"
+
+
 def test_cool_lowers_setpoint():
     gov, state, floor = _gov(air=25.0, floor=28.0, sp=28.0, day=False, delta=4.0)
     result = gov.tick(state, now=1_000.0)

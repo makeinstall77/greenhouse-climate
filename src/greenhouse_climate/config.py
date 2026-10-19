@@ -55,6 +55,9 @@ class Settings:
 
     air_entity: str
     floor_climate_entity: str
+    floor_tuya_device_id: str
+    floor_mode_dp: int
+    floor_manual_dp_value: str
     sun_entity: str
     weather_entity: str
     helper_enabled: str
@@ -104,6 +107,12 @@ class Settings:
                 "FLOOR_CLIMATE_ENTITY",
                 "climate.smart_thermostat_local_teplyi_pol_local",
             ),
+            # LocalTuya device_id + DP4: "1"=manual, "0"=program/schedule.
+            floor_tuya_device_id=os.environ.get(
+                "FLOOR_TUYA_DEVICE_ID", "eb13b6968bc47f3dc6lmc6"
+            ),
+            floor_mode_dp=_i("FLOOR_MODE_DP", 4),
+            floor_manual_dp_value=os.environ.get("FLOOR_MANUAL_DP_VALUE", "1"),
             sun_entity=os.environ.get("SUN_ENTITY", "sun.sun"),
             weather_entity=os.environ.get(
                 "WEATHER_ENTITY", "weather.forecast_home_assistant"

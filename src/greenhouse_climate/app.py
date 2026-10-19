@@ -35,7 +35,12 @@ class Controller:
         self.ha = HaRest(settings.ha_url, settings.ha_token)
         self.air = HaAirTemperature(self.ha, settings.air_entity)
         self.floor = HaFloorThermostat(
-            self.ha, settings.floor_climate_entity, dry_run=settings.dry_run
+            self.ha,
+            settings.floor_climate_entity,
+            dry_run=settings.dry_run,
+            tuya_device_id=settings.floor_tuya_device_id,
+            mode_dp=settings.floor_mode_dp,
+            manual_dp_value=settings.floor_manual_dp_value,
         )
         self.day_night = HaDayNight(self.ha, settings.sun_entity)
         self.solar_hint = HaSunWeatherHint(
