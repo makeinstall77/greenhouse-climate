@@ -142,6 +142,7 @@ def test_disabled_does_not_write():
 
 def test_turns_thermostat_on_when_off_even_without_setpoint_write():
     # Hold near target: desired SP matches current → no write, but heat must enable.
+    # Cloud Tuya prefers heat_cool; FakeFloor accepts the first successful set.
     floor = FakeFloor(current=26.0, setpoint=26.0, mode="off")
     gov, state, _ = _gov(
         air=22.0, floor=26.0, sp=26.0, day=False, delta=4.0, floor_dev=floor
@@ -149,7 +150,7 @@ def test_turns_thermostat_on_when_off_even_without_setpoint_write():
     result = gov.tick(state, now=1_000.0)
     assert result.mode == "hold"
     assert floor.writes == []
-    assert floor.mode == "heat"
+    assert floor.mode == "heat_cool"
 
 
 def test_leaves_schedule_auto_for_heat_manual_even_without_setpoint_write():
@@ -161,7 +162,17 @@ def test_leaves_schedule_auto_for_heat_manual_even_without_setpoint_write():
     result = gov.tick(state, now=1_000.0)
     assert result.mode == "hold"
     assert floor.writes == []
-    assert floor.mode == "heat"
+    assert floor.mode == "heat_cool"
+
+
+def test_accepts_cloud_heat_cool_as_already_on():
+    floor = FakeFloor(current=26.0, setpoint=26.0, mode="heat_cool")
+    gov, state, _ = _gov(
+        air=22.0, floor=26.0, sp=26.0, day=False, delta=4.0, floor_dev=floor
+    )
+    result = gov.tick(state, now=1_000.0)
+    assert result.mode == "hold"
+    assert floor.mode == "heat_cool"
 
 
 def test_cool_lowers_setpoint():

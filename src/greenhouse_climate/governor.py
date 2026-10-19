@@ -395,14 +395,14 @@ class SetpointGovernor:
         except Exception as exc:
             log.warning("hvac mode read failed: %s", exc)
             return
-        # Stay in heat/manual while the governor is active.
-        # - off / unknown → power on (heat)
-        # - auto → leave program/schedule (LocalTuya DP4 "0") for manual ("1")
-        # LocalTuya may briefly report unknown; treat anything but heat as wrong.
-        if mode == "heat":
+        # Cloud Tuya wk thermostat: on = heat_cool. LocalTuya: heat/manual.
+        # auto → leave program/schedule for manual.
+        if mode in {"heat", "heat_cool"}:
             return
-        try:
-            self.floor.set_hvac_mode("heat")
-            log.info("hvac mode %s -> heat/manual", mode)
-        except Exception as exc:
-            log.warning("hvac mode set failed: %s", exc)
+        for target in ("heat_cool", "heat"):
+            try:
+                self.floor.set_hvac_mode(target)
+                log.info("hvac mode %s -> %s", mode, target)
+                return
+            except Exception as exc:
+                log.warning("hvac mode set %s failed: %s", target, exc)
