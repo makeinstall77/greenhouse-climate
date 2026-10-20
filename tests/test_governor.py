@@ -197,6 +197,77 @@ def test_falling_blocks_cool_and_keeps_setpoint():
     assert result.desired_c == 33.0
 
 
+def test_falling_hysteresis_stops_cool_hold_setpoint_chatter():
+    """Near -trend_fall_c, without hysteresis cool(34)↔hold(35) at floor_max."""
+    floor = FakeFloor(current=34.5, setpoint=35.0)
+    air = FakeAir(27.8)
+    history = FakeHistory()
+    delta_model = DeltaModel(history, refresh_s=1e9, default_delta_c=10.0)
+    gov = SetpointGovernor(
+        air,
+        floor,
+        FakeDay(False),
+        delta_model,
+        GovernorParams(
+            min_write_interval_s=180.0,
+            setpoint_step_c=0.5,
+            floor_max_c=35.0,
+            margin_c=1.0,
+            trend_min_s=600.0,
+            trend_window_s=1200.0,
+            trend_fall_c=0.1,
+            trend_fall_exit_c=0.15,
+        ),
+    )
+    state = ControlState(enabled=True, target_c=25.0, delta_c=10.0)
+    t0 = 1_000_000.0
+    # Slow fall ~0.12 °C/h — enters falling; then flat near zero would
+    # previously exit and cool 35→34 every few minutes.
+    state.air_history = [[t0 - 1200.0, 27.8 + 0.04], [t0 - 600.0, 27.8 + 0.02]]
+    state.last_air_c = 27.8 + 0.02
+    state.last_air_at = t0 - 600.0
+    state.falling_guess = False
+    now = t0
+    result = gov.tick(state, now=now)
+    assert result.falling_guess is True
+    assert result.mode == "hold"
+    assert floor.setpoint == 35.0
+    # Near-flat rate (~0 °C/h): still falling until exit threshold.
+    air.value = 27.8
+    state.air_history = [[now - 1200.0, 27.8], [now - 600.0, 27.8]]
+    now += 90
+    result = gov.tick(state, now=now)
+    assert result.falling_guess is True
+    assert result.mode == "hold"
+    assert floor.writes == []
+    assert floor.setpoint == 35.0
+
+
+def test_small_setpoint_flip_respects_min_write_interval():
+    """1 °C cool↔hold at clamp must not bypass min_write_interval."""
+    floor = FakeFloor(current=34.5, setpoint=35.0)
+    gov, state, _ = _gov(
+        air=28.0, floor=34.5, sp=35.0, day=False, delta=10.0, target=25.0, floor_dev=floor
+    )
+    # Force params with real interval (helper uses 0).
+    gov.params = GovernorParams(
+        min_write_interval_s=180.0,
+        setpoint_step_c=0.5,
+        floor_max_c=35.0,
+        margin_c=1.0,
+        trend_min_s=120.0,
+        trend_window_s=1200.0,
+        trend_fall_c=0.1,
+    )
+    state.last_write_at = 1_000.0
+    state.last_setpoint_c = 35.0
+    # Not falling → cool wants ~34; within interval after a write.
+    result = gov.tick(state, now=1_090.0)
+    assert result.mode == "cool"
+    assert result.desired_c == 34.0
+    assert floor.writes == []
+
+
 def test_slow_overnight_fall_does_not_lower_setpoint():
     """~1 °C/h overnight fall must keep floor SP (old per-tick Δ=0.2 missed this)."""
     floor = FakeFloor(current=30.0, setpoint=33.0)

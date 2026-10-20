@@ -34,6 +34,9 @@ class GovernorParams:
     # Air trend thresholds in °C/hour over [trend_min_s, trend_window_s].
     trend_rise_c: float = 0.8
     trend_fall_c: float = 0.1
+    # Exit falling only when rate rises this far above -trend_fall_c
+    # (stops cool↔hold setpoint chatter at the floor_max clamp).
+    trend_fall_exit_c: float = 0.15
     trend_window_s: float = 1200.0
     trend_min_s: float = 600.0
     trend_max_s: float = 7200.0
@@ -107,7 +110,7 @@ class SetpointGovernor:
             solar_guess = self._solar_guess(
                 air_rate, floor_c, setpoint_c, is_day
             )
-            falling_guess = self._falling_guess(air_rate)
+            falling_guess = self._falling_guess(air_rate, state.falling_guess)
             state.last_air_c = air_c
             state.last_air_at = now
 
@@ -316,10 +319,19 @@ class SetpointGovernor:
         )
         return air_rate > self.params.trend_rise_c and not floor_driving
 
-    def _falling_guess(self, air_rate: Optional[float]) -> bool:
+    def _falling_guess(self, air_rate: Optional[float], prev: bool) -> bool:
+        """Hysteresis: enter on fall, exit only after clear recovery.
+
+        Without this, rate near ``-trend_fall_c`` flips cool↔hold and
+        chatters floor setpoint by one step at the clamp (e.g. 35↔34).
+        """
         if air_rate is None:
-            return False
-        return air_rate < -self.params.trend_fall_c
+            return prev
+        enter = -self.params.trend_fall_c
+        exit_at = enter + self.params.trend_fall_exit_c
+        if prev:
+            return air_rate < exit_at
+        return air_rate < enter
 
     def _safe_air(self) -> Optional[float]:
         try:
@@ -385,7 +397,9 @@ class SetpointGovernor:
         now: float,
     ) -> bool:
         if state.last_write_at and (now - state.last_write_at) < self.params.min_write_interval_s:
-            if current_sp is None or abs(current_sp - write_value) < self.params.setpoint_step_c * 2:
+            # Bypass interval only for large moves (heat catch-up). One-step
+            # cool↔hold flips are exactly 2*step and must stay rate-limited.
+            if current_sp is None or abs(current_sp - write_value) <= self.params.setpoint_step_c * 2 + 1e-6:
                 return False
         return True
 
