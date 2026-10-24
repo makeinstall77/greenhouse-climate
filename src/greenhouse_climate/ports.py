@@ -27,10 +27,13 @@ class FloorThermostat(Protocol):
         """e.g. heat / off / auto (program/schedule)."""
 
     def set_hvac_mode(self, mode: str) -> None:
-        """Set HVAC mode when the controller needs heat enabled.
+        """Set HVAC mode when the controller needs heat enabled."""
 
-        For the LocalTuya floor thermostat, ``heat`` also means manual
-        (not program/schedule), so setpoints can be applied.
+    def ensure_manual(self) -> None:
+        """Leave program/schedule so set_temperature is honored.
+
+        Cloud Tuya often stays ``heat_cool`` while the device is in schedule;
+        adapters must force the local mode DP (manual) explicitly.
         """
 
 

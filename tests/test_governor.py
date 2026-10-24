@@ -26,6 +26,8 @@ class FakeFloor:
     setpoint: float
     mode: str = "heat"
     writes: list[float] = field(default_factory=list)
+    ensure_manual_calls: int = 0
+    program: bool = False
     fail_current: bool = False
     fail_write: bool = False
 
@@ -48,6 +50,12 @@ class FakeFloor:
 
     def set_hvac_mode(self, mode: str) -> None:
         self.mode = mode
+        if mode in {"heat", "heat_cool"}:
+            self.ensure_manual()
+
+    def ensure_manual(self) -> None:
+        self.ensure_manual_calls += 1
+        self.program = False
 
 
 @dataclass
@@ -173,6 +181,21 @@ def test_accepts_cloud_heat_cool_as_already_on():
     result = gov.tick(state, now=1_000.0)
     assert result.mode == "hold"
     assert floor.mode == "heat_cool"
+
+
+def test_forces_manual_even_when_cloud_already_heat_cool():
+    # Physical program switch: cloud stays heat_cool, schedule ignores SP.
+    floor = FakeFloor(
+        current=26.0, setpoint=34.0, mode="heat_cool", program=True
+    )
+    gov, state, _ = _gov(
+        air=22.0, floor=26.0, sp=34.0, day=False, delta=4.0, floor_dev=floor
+    )
+    result = gov.tick(state, now=1_000.0)
+    assert result.mode == "hold"
+    assert floor.mode == "heat_cool"
+    assert floor.ensure_manual_calls >= 1
+    assert floor.program is False
 
 
 def test_cool_lowers_setpoint():

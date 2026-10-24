@@ -404,13 +404,20 @@ class SetpointGovernor:
         return True
 
     def _ensure_heat_mode(self) -> None:
+        # Cloud Tuya reports heat_cool both in manual and program/schedule.
+        # Always force manual DP first — otherwise set_temperature is ignored
+        # and the floor follows the (cold) schedule.
+        try:
+            self.floor.ensure_manual()
+        except Exception as exc:
+            log.warning("ensure manual failed: %s", exc)
+
         try:
             mode = self.floor.read_hvac_mode()
         except Exception as exc:
             log.warning("hvac mode read failed: %s", exc)
             return
-        # Cloud Tuya wk thermostat: on = heat_cool. LocalTuya: heat/manual.
-        # auto → leave program/schedule for manual.
+        # Cloud Tuya wk thermostat: on = heat_cool. LocalTuya: heat.
         if mode in {"heat", "heat_cool"}:
             return
         for target in ("heat_cool", "heat"):

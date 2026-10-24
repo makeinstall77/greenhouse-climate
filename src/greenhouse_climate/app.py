@@ -39,6 +39,9 @@ class Controller:
             settings.floor_climate_entity,
             dry_run=settings.dry_run,
             tuya_device_id=settings.floor_tuya_device_id,
+            tuya_host=settings.floor_tuya_host,
+            tuya_local_key=settings.floor_tuya_local_key,
+            tuya_protocol=settings.floor_tuya_protocol,
             mode_dp=settings.floor_mode_dp,
             manual_dp_value=settings.floor_manual_dp_value,
         )

@@ -56,6 +56,9 @@ class Settings:
     air_entity: str
     floor_climate_entity: str
     floor_tuya_device_id: str
+    floor_tuya_host: str
+    floor_tuya_local_key: str
+    floor_tuya_protocol: float
     floor_mode_dp: int
     floor_manual_dp_value: str
     sun_entity: str
@@ -107,8 +110,12 @@ class Settings:
                 "FLOOR_CLIMATE_ENTITY",
                 "climate.smart_thermostat",
             ),
-            # Optional LocalTuya device_id + DP4: "1"=manual, "0"=program/schedule.
+            # Local force-manual: tinytuya (host+key) preferred; LocalTuya set_dp fallback.
+            # DP4: "1"=manual, "0"=program/schedule — cloud climate hides this.
             floor_tuya_device_id=os.environ.get("FLOOR_TUYA_DEVICE_ID", ""),
+            floor_tuya_host=os.environ.get("FLOOR_TUYA_HOST", ""),
+            floor_tuya_local_key=os.environ.get("FLOOR_TUYA_LOCAL_KEY", ""),
+            floor_tuya_protocol=_f("FLOOR_TUYA_PROTOCOL", 3.3),
             floor_mode_dp=_i("FLOOR_MODE_DP", 4),
             floor_manual_dp_value=os.environ.get("FLOOR_MANUAL_DP_VALUE", "1"),
             sun_entity=os.environ.get("SUN_ENTITY", "sun.sun"),
