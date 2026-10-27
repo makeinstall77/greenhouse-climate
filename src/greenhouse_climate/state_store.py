@@ -32,6 +32,10 @@ class ControlState:
     mode: str = "idle"
     helper_enabled_seen: Optional[str] = None
     helper_target_seen: Optional[float] = None
+    # Alert debounce: fault key -> unix ts when continuous fault started.
+    alert_fault_since: dict[str, float] = field(default_factory=dict)
+    # Alert debounce: fault key -> True after down notification was sent.
+    alert_sent: dict[str, bool] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -50,6 +54,22 @@ class ControlState:
                 except (TypeError, ValueError):
                     continue
             kwargs["air_history"] = cleaned
+        since = kwargs.get("alert_fault_since")
+        if isinstance(since, dict):
+            cleaned_since: dict[str, float] = {}
+            for key, val in since.items():
+                try:
+                    cleaned_since[str(key)] = float(val)
+                except (TypeError, ValueError):
+                    continue
+            kwargs["alert_fault_since"] = cleaned_since
+        elif since is not None:
+            kwargs["alert_fault_since"] = {}
+        sent = kwargs.get("alert_sent")
+        if isinstance(sent, dict):
+            kwargs["alert_sent"] = {str(k): bool(v) for k, v in sent.items()}
+        elif sent is not None:
+            kwargs["alert_sent"] = {}
         return cls(**kwargs)
 
 

@@ -197,7 +197,9 @@ class SetpointGovernor:
 
         # Keep thermostat on even when setpoint does not need a write
         # (e.g. someone turned climate off in HA).
-        self._ensure_heat_mode()
+        if not self._ensure_heat_mode():
+            degraded.append("hvac")
+            state.degraded = list(degraded)
 
         write_value = self._rate_limited(setpoint_c, desired)
         # Extra guard: never commit a lower setpoint while falling.
@@ -403,7 +405,8 @@ class SetpointGovernor:
                 return False
         return True
 
-    def _ensure_heat_mode(self) -> None:
+    def _ensure_heat_mode(self) -> bool:
+        """Force manual + heat/heat_cool. Return False if still not heating."""
         # Cloud Tuya reports heat_cool both in manual and program/schedule.
         # Always force manual DP first — otherwise set_temperature is ignored
         # and the floor follows the (cold) schedule.
@@ -416,14 +419,15 @@ class SetpointGovernor:
             mode = self.floor.read_hvac_mode()
         except Exception as exc:
             log.warning("hvac mode read failed: %s", exc)
-            return
+            return False
         # Cloud Tuya wk thermostat: on = heat_cool. LocalTuya: heat.
         if mode in {"heat", "heat_cool"}:
-            return
+            return True
         for target in ("heat_cool", "heat"):
             try:
                 self.floor.set_hvac_mode(target)
                 log.info("hvac mode %s -> %s", mode, target)
-                return
+                return True
             except Exception as exc:
                 log.warning("hvac mode set %s failed: %s", target, exc)
+        return False

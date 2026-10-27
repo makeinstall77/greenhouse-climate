@@ -86,6 +86,8 @@ class Settings:
     delta_ema_alpha: float
     delta_steady_tol_c: float
     dry_run: bool
+    notifier_url: str
+    alert_after_s: float
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -149,4 +151,8 @@ class Settings:
             delta_ema_alpha=_f("DELTA_EMA_ALPHA", 0.2),
             delta_steady_tol_c=_f("DELTA_STEADY_TOL_C", 1.0),
             dry_run=_b("DRY_RUN", False),
+            notifier_url=os.environ.get(
+                "NOTIFIER_URL", "http://172.16.10.120:5000/send"
+            ),
+            alert_after_s=_f("ALERT_AFTER_S", 1800.0),
         )

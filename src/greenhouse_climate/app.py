@@ -17,11 +17,13 @@ from greenhouse_climate.adapters import (
     HaFloorThermostat,
     HaSunWeatherHint,
     HaTemperatureHistory,
+    make_notifier,
 )
 from greenhouse_climate.config import Settings, load_env_file
 from greenhouse_climate.delta_model import DeltaModel
 from greenhouse_climate.governor import GovernorParams, SetpointGovernor
 from greenhouse_climate.ha_rest import HaRest
+from greenhouse_climate.monitor import AlertMonitor, MonitorParams
 from greenhouse_climate.state_store import StateStore
 
 log = logging.getLogger("greenhouse_climate")
@@ -85,6 +87,13 @@ class Controller:
                 trend_max_s=settings.trend_max_s,
             ),
             solar_hint=self.solar_hint,
+        )
+        self.monitor = AlertMonitor(
+            make_notifier(settings.notifier_url),
+            MonitorParams(
+                alert_after_s=settings.alert_after_s,
+                deadband_c=settings.deadband_c,
+            ),
         )
         self._lock = threading.RLock()
         self._last_tick: Optional[dict[str, Any]] = None
@@ -162,6 +171,10 @@ class Controller:
         self.sync_helpers_from_ha()
         with self._lock:
             result = self.governor.tick(self.store.state)
+            try:
+                self.monitor.evaluate(self.store.state, result)
+            except Exception:
+                log.exception("alert monitor failed")
             self._last_tick = {
                 "mode": result.mode,
                 "air_c": result.air_c,

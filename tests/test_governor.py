@@ -30,6 +30,7 @@ class FakeFloor:
     program: bool = False
     fail_current: bool = False
     fail_write: bool = False
+    fail_hvac_set: bool = False
 
     def read_current_c(self) -> float:
         if self.fail_current:
@@ -49,6 +50,8 @@ class FakeFloor:
         return self.mode
 
     def set_hvac_mode(self, mode: str) -> None:
+        if self.fail_hvac_set:
+            raise RuntimeError("hvac set failed")
         self.mode = mode
         if mode in {"heat", "heat_cool"}:
             self.ensure_manual()
@@ -460,6 +463,19 @@ def test_write_failure_does_not_abort_tick():
     assert result.mode == "heat"
     assert result.written is False
     assert "write" in result.degraded
+
+
+def test_hvac_stuck_off_marks_degraded():
+    floor = FakeFloor(
+        current=26.0, setpoint=26.0, mode="off", fail_hvac_set=True
+    )
+    gov, state, _ = _gov(
+        air=22.0, floor=26.0, sp=26.0, day=False, delta=4.0, floor_dev=floor
+    )
+    result = gov.tick(state, now=1_000.0)
+    assert result.mode == "hold"
+    assert "hvac" in result.degraded
+    assert floor.mode == "off"
 
 
 def test_sun_failure_assumes_night_boost():

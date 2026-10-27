@@ -15,7 +15,8 @@
 4. **Тренд воздуха приоритетен** (°C/ч за `TREND_WINDOW_S`, по умолчанию 20 мин): при падении **никогда** не снижает уставку пола (`falling_guess`); при росте без нагрева пола снижает на `SOLAR_OFFSET_C` (`solar_guess`).
 5. Sun + weather — вторичный early hint (`likely_sun`); при конфликте с трендом побеждает тренд (ночное падение / открытое окно / ошибка прогноза).
 6. Недоступность air/floor/sun/weather/записи → `degraded` / warning, tick не падает.
-7. UI: HA helpers + Lovelace card. HTTP `/v1/control` — для будущего TG-бота.
+7. Мониторинг (в том же loop): floor недоступен / write|hvac / воздух ниже цели — после **30 мин** непрерывного отказа шлёт в tg-notifier (`NOTIFIER_URL`), при восстановлении — «ок». Краткие обрывы связи не алертят.
+8. UI: HA helpers + Lovelace card. HTTP `/v1/control` — для будущего TG-бота.
 
 ## API
 
