@@ -18,12 +18,19 @@ from greenhouse_climate.adapters import (
     HaSunWeatherHint,
     HaTemperatureHistory,
     make_notifier,
+    make_power_cycler,
 )
 from greenhouse_climate.config import Settings, load_env_file
 from greenhouse_climate.delta_model import DeltaModel
 from greenhouse_climate.governor import GovernorParams, SetpointGovernor
 from greenhouse_climate.ha_rest import HaRest
-from greenhouse_climate.monitor import AlertMonitor, MonitorParams
+from greenhouse_climate.monitor import (
+    AlertMonitor,
+    MonitorParams,
+    PanelLinkMonitor,
+    PanelLinkParams,
+    RebootParams,
+)
 from greenhouse_climate.state_store import StateStore
 
 log = logging.getLogger("greenhouse_climate")
@@ -88,12 +95,29 @@ class Controller:
             ),
             solar_hint=self.solar_hint,
         )
+        notifier = make_notifier(settings.notifier_url)
+        self.power_cycler = make_power_cycler(
+            self.ha,
+            settings.reboot_entity,
+            dry_run=settings.dry_run,
+        )
         self.monitor = AlertMonitor(
-            make_notifier(settings.notifier_url),
+            notifier,
             MonitorParams(
                 alert_after_s=settings.alert_after_s,
                 deadband_c=settings.deadband_c,
             ),
+            power_cycler=self.power_cycler,
+        )
+        self.panel_link = PanelLinkMonitor(
+            notifier,
+            entity_id=settings.panel_link_entity,
+            get_state=self.ha.get_state,
+            params=PanelLinkParams(after_s=settings.panel_link_after_s),
+        )
+        # Defaults match ha/helpers.yaml; overwritten each tick from HA.
+        self._reboot_params = RebootParams(
+            enabled=True, cooldown_s=7200.0, max_per_day=2
         )
         self._lock = threading.RLock()
         self._last_tick: Optional[dict[str, Any]] = None
@@ -116,6 +140,12 @@ class Controller:
                 "degraded": list(st.degraded),
                 "last_setpoint_c": st.last_setpoint_c,
                 "dry_run": self.settings.dry_run,
+                "autoreboot": self._reboot_params.enabled,
+                "reboot_cooldown_s": self._reboot_params.cooldown_s,
+                "reboot_max_per_day": self._reboot_params.max_per_day,
+                "reboot_last_at": st.reboot_last_at or None,
+                "reboot_count_day": st.reboot_count_day,
+                "panel_link_alert": st.panel_link_alert_sent,
                 "last_tick": self._last_tick,
             }
             return out
@@ -147,6 +177,35 @@ class Controller:
                 st.helper_target_seen = tgt_val
             except Exception as exc:
                 log.warning("helper sync failed: %s", exc)
+            self._sync_reboot_helpers()
+
+    def _sync_reboot_helpers(self) -> None:
+        """Read autoreboot knobs from HA (fail soft → keep last params)."""
+        enabled = self._reboot_params.enabled
+        cooldown_min = self._reboot_params.cooldown_s / 60.0
+        max_per_day = self._reboot_params.max_per_day
+        try:
+            en = self.ha.get_state(self.settings.helper_autoreboot)
+            en_state = en.get("state")
+            if en_state in {"on", "off"}:
+                enabled = en_state == "on"
+        except Exception as exc:
+            log.warning("autoreboot helper sync failed: %s", exc)
+        try:
+            cd = self.ha.get_state(self.settings.helper_reboot_cooldown)
+            cooldown_min = float(cd.get("state"))
+        except Exception as exc:
+            log.warning("reboot cooldown helper sync failed: %s", exc)
+        try:
+            mx = self.ha.get_state(self.settings.helper_reboot_max)
+            max_per_day = int(float(mx.get("state")))
+        except Exception as exc:
+            log.warning("reboot max helper sync failed: %s", exc)
+        self._reboot_params = RebootParams(
+            enabled=enabled,
+            cooldown_s=max(0.0, cooldown_min) * 60.0,
+            max_per_day=max(0, max_per_day),
+        )
 
     def _push_helpers(self) -> None:
         st = self.store.state
@@ -172,9 +231,17 @@ class Controller:
         with self._lock:
             result = self.governor.tick(self.store.state)
             try:
-                self.monitor.evaluate(self.store.state, result)
+                self.monitor.evaluate(
+                    self.store.state,
+                    result,
+                    reboot=self._reboot_params,
+                )
             except Exception:
                 log.exception("alert monitor failed")
+            try:
+                self.panel_link.evaluate(self.store.state)
+            except Exception:
+                log.exception("panel link monitor failed")
             self._last_tick = {
                 "mode": result.mode,
                 "air_c": result.air_c,

@@ -16,7 +16,8 @@
 5. Sun + weather — вторичный early hint (`likely_sun`); при конфликте с трендом побеждает тренд (ночное падение / открытое окно / ошибка прогноза).
 6. Недоступность air/floor/sun/weather/записи → `degraded` / warning, tick не падает.
 7. Мониторинг (в том же loop): floor недоступен / write|hvac / воздух ниже цели — после **30 мин** непрерывного отказа шлёт в tg-notifier (`NOTIFIER_URL`), при восстановлении — «ок». Краткие обрывы связи не алертят.
-8. UI: HA helpers + Lovelace card. HTTP `/v1/control` — для будущего TG-бота.
+8. При floor/write_hvac алерте — опциональный **autoreboot** термостата через ESPHome `button.panel_ssr_thermostat_reboot` (knobs в HA helpers).
+9. UI: HA helpers + Lovelace card. HTTP `/v1/control` — для будущего TG-бота.
 
 ## API
 
@@ -84,9 +85,41 @@ pytest
 HA_TOKEN=… DRY_RUN=1 STATE_PATH=./state.json python -m greenhouse_climate
 ```
 
+## Panel SSR (ESP32-C3, 4 lines)
+
+Щитовые реле: 3×1ф + 1×3ф (киллсвитч освещения). ESP32-C3 + 4ch SSR рвут **только фазы катушек** (не силовые 25 А / L1–L3).
+
+| CH | GPIO | HA entities | Назначение |
+|----|------|-------------|------------|
+| 1 | 4 | `switch.panel_ssr_line1_power`, `button.panel_ssr_line1_reboot` | 1ф |
+| 2 | 5 | `switch.panel_ssr_line2_power`, `button.panel_ssr_line2_reboot` | 1ф |
+| 3 | 6 | `switch.panel_ssr_thermostat_power`, `button.panel_ssr_thermostat_reboot` | термостат |
+| 4 | 7 | `switch.panel_ssr_lighting_power`, `button.panel_ssr_lighting_reboot` | 3ф свет |
+
+Fail-safe: каналы нормально ON; нет питания ESP/SSR → катушки OFF. Reboot = OFF 15 с → ON. Модуль SSR — **low-trigger** (`inverted: true`: ON → GPIO LOW).
+
+Firmware: [`esphome/panel-ssr.yaml`](esphome/panel-ssr.yaml) + [`esphome/secrets.yaml.example`](esphome/secrets.yaml.example) (`notifier_url`).
+
+### Notifier events (panel)
+
+| Event | Source | Text |
+|-------|--------|------|
+| `panel_ch_on` / `panel_ch_off` | ESPHome | включён / выключен канал |
+| `panel_ch_reboot` | ESPHome (конец pulse) | перезагружен канал |
+| `panel_link_down` / `panel_link_up` | greenhouse-climate | нет связи / снова в сети |
+
+### Autoreboot helpers
+
+В [`ha/helpers.yaml`](ha/helpers.yaml):
+
+- `input_boolean.greenhouse_thermostat_autoreboot`
+- `input_number.greenhouse_thermostat_reboot_cooldown_min` (default 120)
+- `input_number.greenhouse_thermostat_reboot_max_per_day` (default 2)
+
+Env wiring: `REBOOT_ENTITY`, `PANEL_LINK_ENTITY`, `PANEL_LINK_AFTER_S`, `HELPER_AUTOREBOOT`, `HELPER_REBOOT_COOLDOWN`, `HELPER_REBOOT_MAX`. Пустой `REBOOT_ENTITY=` отключает press.
+
 ## Out of scope (for now)
 
 - Telegram bot (API ready)
 - Local illuminance sensor (port reserved; weather is interim proxy)
 - Humidity adapters (ports reserved)
-- Direct LocalTuya / ESPHome (possible as new adapters)

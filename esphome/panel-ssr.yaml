@@ -1,0 +1,276 @@
+# ESP32-C3 + 4ch SSR → катушки щитовых реле (3×1ф + 1×3ф освещение).
+# Secrets: wifi_ssid, wifi_password, api_key, ota_password, notifier_url
+# notifier_url example: http://172.16.10.120:5000/send
+
+substitutions:
+  device_name: panel-ssr
+  friendly_name: Panel SSR
+  reboot_delay: "15s"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${device_name}-fallback
+    password: !secret wifi_password
+
+captive_portal:
+
+http_request:
+  useragent: esphome/${device_name}
+  timeout: 8s
+  verify_ssl: false
+
+globals:
+  - id: suppress_notify
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+script:
+  - id: notify_send
+    parameters:
+      text: string
+      event: string
+      dedup_key: string
+    then:
+      - http_request.post:
+          url: !secret notifier_url
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          body: !lambda |-
+            auto pct = [](const std::string &in) -> std::string {
+              static const char *hex = "0123456789ABCDEF";
+              std::string out;
+              out.reserve(in.size() * 3);
+              for (unsigned char c : in) {
+                if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+                    c == '.' || c == '~') {
+                  out.push_back(static_cast<char>(c));
+                } else if (c == ' ') {
+                  out.push_back('+');
+                } else {
+                  out.push_back('%');
+                  out.push_back(hex[c >> 4]);
+                  out.push_back(hex[c & 15]);
+                }
+              }
+              return out;
+            };
+            return std::string("text=") + pct(text) +
+                   "&sender=panel-ssr&priority=50&parse_mode=HTML&event=" +
+                   pct(event) + "&dedup_key=" + pct(dedup_key);
+
+  - id: reboot_line1
+    mode: single
+    then:
+      - lambda: id(suppress_notify) = true;
+      - switch.turn_off: panel_line1_power
+      - delay: ${reboot_delay}
+      - switch.turn_on: panel_line1_power
+      - lambda: id(suppress_notify) = false;
+      - script.execute:
+          id: notify_send
+          text: "🔄 panel: перезагружен «line1»"
+          event: panel_ch_reboot
+          dedup_key: "panel:line1:reboot"
+
+  - id: reboot_line2
+    mode: single
+    then:
+      - lambda: id(suppress_notify) = true;
+      - switch.turn_off: panel_line2_power
+      - delay: ${reboot_delay}
+      - switch.turn_on: panel_line2_power
+      - lambda: id(suppress_notify) = false;
+      - script.execute:
+          id: notify_send
+          text: "🔄 panel: перезагружен «line2»"
+          event: panel_ch_reboot
+          dedup_key: "panel:line2:reboot"
+
+  - id: reboot_thermostat
+    mode: single
+    then:
+      - lambda: id(suppress_notify) = true;
+      - switch.turn_off: panel_thermostat_power
+      - delay: ${reboot_delay}
+      - switch.turn_on: panel_thermostat_power
+      - lambda: id(suppress_notify) = false;
+      - script.execute:
+          id: notify_send
+          text: "🔄 panel: перезагружен «термостат»"
+          event: panel_ch_reboot
+          dedup_key: "panel:thermostat:reboot"
+
+  - id: reboot_lighting
+    mode: single
+    then:
+      - lambda: id(suppress_notify) = true;
+      - switch.turn_off: panel_lighting_power
+      - delay: ${reboot_delay}
+      - switch.turn_on: panel_lighting_power
+      - lambda: id(suppress_notify) = false;
+      - script.execute:
+          id: notify_send
+          text: "🔄 panel: перезагружен «освещение»"
+          event: panel_ch_reboot
+          dedup_key: "panel:lighting:reboot"
+
+switch:
+  - platform: gpio
+    id: panel_line1_power
+    name: Line1 Power
+    pin:
+      number: GPIO4
+      inverted: true
+    restore_mode: ALWAYS_ON
+    on_turn_on:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🟢 panel: включён «line1»"
+                event: panel_ch_on
+                dedup_key: "panel:line1:on"
+    on_turn_off:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🔴 panel: выключен «line1»"
+                event: panel_ch_off
+                dedup_key: "panel:line1:off"
+
+  - platform: gpio
+    id: panel_line2_power
+    name: Line2 Power
+    pin:
+      number: GPIO5
+      inverted: true
+    restore_mode: ALWAYS_ON
+    on_turn_on:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🟢 panel: включён «line2»"
+                event: panel_ch_on
+                dedup_key: "panel:line2:on"
+    on_turn_off:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🔴 panel: выключен «line2»"
+                event: panel_ch_off
+                dedup_key: "panel:line2:off"
+
+  - platform: gpio
+    id: panel_thermostat_power
+    name: Thermostat Power
+    pin:
+      number: GPIO6
+      inverted: true
+    restore_mode: ALWAYS_ON
+    on_turn_on:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🟢 panel: включён «термостат»"
+                event: panel_ch_on
+                dedup_key: "panel:thermostat:on"
+    on_turn_off:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🔴 panel: выключен «термостат»"
+                event: panel_ch_off
+                dedup_key: "panel:thermostat:off"
+
+  - platform: gpio
+    id: panel_lighting_power
+    name: Lighting Power
+    pin:
+      number: GPIO7
+      inverted: true
+    restore_mode: ALWAYS_ON
+    on_turn_on:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🟢 panel: включён «освещение»"
+                event: panel_ch_on
+                dedup_key: "panel:lighting:on"
+    on_turn_off:
+      - if:
+          condition:
+            lambda: return !id(suppress_notify);
+          then:
+            - script.execute:
+                id: notify_send
+                text: "🔴 panel: выключен «освещение»"
+                event: panel_ch_off
+                dedup_key: "panel:lighting:off"
+
+button:
+  - platform: template
+    name: Line1 Reboot
+    id: panel_line1_reboot
+    on_press:
+      - script.execute: reboot_line1
+
+  - platform: template
+    name: Line2 Reboot
+    id: panel_line2_reboot
+    on_press:
+      - script.execute: reboot_line2
+
+  - platform: template
+    name: Thermostat Reboot
+    id: panel_thermostat_reboot
+    on_press:
+      - script.execute: reboot_thermostat
+
+  - platform: template
+    name: Lighting Reboot
+    id: panel_lighting_reboot
+    on_press:
+      - script.execute: reboot_lighting

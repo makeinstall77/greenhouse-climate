@@ -36,6 +36,13 @@ class ControlState:
     alert_fault_since: dict[str, float] = field(default_factory=dict)
     # Alert debounce: fault key -> True after down notification was sent.
     alert_sent: dict[str, bool] = field(default_factory=dict)
+    # Thermostat power-cycle (panel SSR) accounting.
+    reboot_last_at: float = 0.0
+    reboot_day: str = ""
+    reboot_count_day: int = 0
+    # Panel ESPHome link watch.
+    panel_link_fault_since: Optional[float] = None
+    panel_link_alert_sent: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

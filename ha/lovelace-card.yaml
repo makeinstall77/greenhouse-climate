@@ -7,7 +7,33 @@ entities:
     name: Control enabled
   - entity: input_number.greenhouse_climate_target
     name: Air target
-  - entity: sensor.greenhouse_bmp280_temperature
-    name: Greenhouse air
+  - entity: sensor.indoor_sht45_temperature
+    name: Balcony air
   - entity: climate.smart_thermostat
     name: Floor thermostat
+  - type: section
+    label: Thermostat autoreboot
+  - entity: input_boolean.greenhouse_thermostat_autoreboot
+    name: Autoreboot on alert
+  - entity: input_number.greenhouse_thermostat_reboot_cooldown_min
+    name: Cooldown
+  - entity: input_number.greenhouse_thermostat_reboot_max_per_day
+    name: Max per day
+  - entity: button.panel_ssr_thermostat_reboot
+    name: Reboot thermostat now
+  - type: section
+    label: Panel SSR
+  - entity: switch.panel_ssr_line1_power
+    name: Line1
+  - entity: button.panel_ssr_line1_reboot
+    name: Reboot line1
+  - entity: switch.panel_ssr_line2_power
+    name: Line2
+  - entity: button.panel_ssr_line2_reboot
+    name: Reboot line2
+  - entity: switch.panel_ssr_thermostat_power
+    name: Thermostat power
+  - entity: switch.panel_ssr_lighting_power
+    name: Lighting (3ph kill)
+  - entity: button.panel_ssr_lighting_reboot
+    name: Reboot lighting

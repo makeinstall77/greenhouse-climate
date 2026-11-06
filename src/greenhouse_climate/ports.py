@@ -82,3 +82,11 @@ class TemperatureHistorySource(Protocol):
 
     def fetch_pairs(self, *, hours: float) -> list[TempPairSample]:
         ...
+
+
+@runtime_checkable
+class PowerCycler(Protocol):
+    """Power-cycle a load (e.g. hung thermostat via panel SSR)."""
+
+    def reboot(self) -> bool:
+        """Trigger reboot pulse. Return True if the request was accepted."""

@@ -65,6 +65,12 @@ class Settings:
     weather_entity: str
     helper_enabled: str
     helper_target: str
+    helper_autoreboot: str
+    helper_reboot_cooldown: str
+    helper_reboot_max: str
+    reboot_entity: str
+    panel_link_entity: str
+    panel_link_after_s: float
 
     deadband_c: float
     floor_min_c: float
@@ -106,7 +112,7 @@ class Settings:
             ),
             loop_seconds=_f("LOOP_SECONDS", 90.0),
             air_entity=os.environ.get(
-                "AIR_ENTITY", "sensor.greenhouse_bmp280_temperature"
+                "AIR_ENTITY", "sensor.indoor_sht45_temperature"
             ),
             floor_climate_entity=os.environ.get(
                 "FLOOR_CLIMATE_ENTITY",
@@ -130,6 +136,25 @@ class Settings:
             helper_target=os.environ.get(
                 "HELPER_TARGET", "input_number.greenhouse_climate_target"
             ),
+            helper_autoreboot=os.environ.get(
+                "HELPER_AUTOREBOOT",
+                "input_boolean.greenhouse_thermostat_autoreboot",
+            ),
+            helper_reboot_cooldown=os.environ.get(
+                "HELPER_REBOOT_COOLDOWN",
+                "input_number.greenhouse_thermostat_reboot_cooldown_min",
+            ),
+            helper_reboot_max=os.environ.get(
+                "HELPER_REBOOT_MAX",
+                "input_number.greenhouse_thermostat_reboot_max_per_day",
+            ),
+            reboot_entity=os.environ.get(
+                "REBOOT_ENTITY", "button.panel_ssr_thermostat_reboot"
+            ),
+            panel_link_entity=os.environ.get(
+                "PANEL_LINK_ENTITY", "switch.panel_ssr_thermostat_power"
+            ),
+            panel_link_after_s=_f("PANEL_LINK_AFTER_S", 300.0),
             deadband_c=_f("DEADBAND_C", 0.5),
             floor_min_c=_f("FLOOR_MIN_C", 15.0),
             floor_max_c=_f("FLOOR_MAX_C", 35.0),

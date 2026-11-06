@@ -5,6 +5,10 @@ input_boolean:
   greenhouse_climate_enabled:
     name: Greenhouse climate control
     icon: mdi:radiator
+  greenhouse_thermostat_autoreboot:
+    name: Greenhouse thermostat autoreboot
+    icon: mdi:restart
+    initial: true
 
 input_number:
   greenhouse_climate_target:
@@ -15,3 +19,20 @@ input_number:
     unit_of_measurement: "°C"
     icon: mdi:thermometer
     mode: slider
+  greenhouse_thermostat_reboot_cooldown_min:
+    name: Thermostat reboot cooldown
+    min: 15
+    max: 1440
+    step: 15
+    initial: 120
+    unit_of_measurement: "min"
+    icon: mdi:timer-outline
+    mode: box
+  greenhouse_thermostat_reboot_max_per_day:
+    name: Thermostat reboot max per day
+    min: 0
+    max: 10
+    step: 1
+    initial: 2
+    icon: mdi:counter
+    mode: box

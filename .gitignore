@@ -6,9 +6,12 @@ dist/
 build/
 .pytest_cache/
 .venv/
+.venv-esphome/
 venv/
 .env
 *.env
 !deploy/config.example.env
+esphome/secrets.yaml
+esphome/.esphome/
 state.json
 .DS_Store
